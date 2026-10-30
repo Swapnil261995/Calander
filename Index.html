@@ -1,0 +1,472 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Windows Fluent Calendar</title>
+
+<style>
+
+/* BASIC RESET */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #e9edf3;
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+
+/* CALENDAR WINDOW */
+
+.calendar {
+    width: 360px;
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid white;
+    border-radius: 8px;
+
+    box-shadow:
+        0 8px 25px rgba(0, 0, 0, 0.10);
+}
+
+/* HEADER */
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.month-year {
+    font-size: 22px;
+    font-weight: 600;
+    color: #222;
+}
+
+.navigation {
+    display: flex;
+    gap: 5px;
+}
+
+.navigation button {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    font-size: 21px;
+    cursor: pointer;
+    color: #333;
+}
+
+.navigation button:hover {
+    background: #e5e5e5;
+}
+
+/* CALENDAR GRID */
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+    text-align: center;
+}
+
+.day-name {
+    padding: 10px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #777;
+}
+
+/* DATE CELLS */
+
+.date {
+    position: relative;
+    isolation: isolate;
+
+    height: 40px;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    border-radius: 5px;
+    border: 1px solid transparent;
+
+    color: #333;
+    font-size: 14px;
+
+    cursor: pointer;
+
+    transition:
+        background-color 180ms ease,
+        border-color 180ms ease;
+}
+
+/* FLUENT REVEAL LIGHT */
+
+.date:not(.empty)::before {
+    content: "";
+
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+
+    border-radius: inherit;
+    pointer-events: none;
+
+    background: radial-gradient(
+        circle 75px at var(--reveal-x, 50%) var(--reveal-y, 50%),
+        rgba(255, 255, 255, 0.75),
+        rgba(0, 120, 212, 0.16) 45%,
+        transparent 100%
+    );
+
+    opacity: var(--reveal-opacity, 0);
+
+    transition: opacity 100ms linear;
+}
+
+/* REVEAL BORDER */
+
+.date:not(.empty) {
+    box-shadow:
+        inset 0 0 0 1px
+        rgba(0, 120, 212, var(--reveal-border, 0));
+}
+
+/* DATE TEXT ABOVE LIGHT */
+
+.date > * {
+    position: relative;
+    z-index: 2;
+}
+
+/* TODAY */
+
+.date.today {
+    border: 1px solid #0078d4;
+    font-weight: 700;
+}
+
+/* SPECIAL LOVE DATE */
+
+.date.love-date {
+    background: #fff0f3;
+    color: #c2185b;
+    font-weight: 700;
+}
+
+.date.love-date::before {
+    background: radial-gradient(
+        circle 75px at var(--reveal-x, 50%) var(--reveal-y, 50%),
+        rgba(255, 255, 255, 0.85),
+        rgba(236, 131, 166, 0.30) 50%,
+        transparent 100%
+    );
+}
+
+/* HEART */
+
+.heart {
+    position: absolute;
+    top: 1px;
+    right: 4px;
+    font-size: 10px;
+    z-index: 3;
+}
+
+/* EMPTY CELLS */
+
+.date.empty {
+    pointer-events: none;
+    cursor: default;
+}
+
+/* FOOTER */
+
+.footer {
+    margin-top: 20px;
+    font-size: 12px;
+    color: #888;
+    text-align: center;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="calendar">
+
+    <!-- HEADER -->
+
+    <div class="header">
+
+        <div class="month-year" id="monthYear"></div>
+
+        <div class="navigation">
+            <button id="prevMonth" aria-label="Previous month">‹</button>
+            <button id="nextMonth" aria-label="Next month">›</button>
+        </div>
+
+    </div>
+
+    <!-- CALENDAR -->
+
+    <div class="calendar-grid" id="calendarGrid">
+
+        <div class="day-name">Sun</div>
+        <div class="day-name">Mon</div>
+        <div class="day-name">Tue</div>
+        <div class="day-name">Wed</div>
+        <div class="day-name">Thu</div>
+        <div class="day-name">Fri</div>
+        <div class="day-name">Sat</div>
+
+    </div>
+
+    <div class="footer">
+        ♥ A special day to remember
+    </div>
+
+</div>
+
+
+<script>
+
+/* CALENDAR SETTINGS */
+
+let currentMonth = 10;
+let currentYear = 2026;
+
+/* SPECIAL DATE */
+
+const loveDay = 4;
+const loveMonth = 10;
+const loveYear = 2026;
+
+const grid = document.getElementById("calendarGrid");
+const heading = document.getElementById("monthYear");
+
+
+/* CREATE CALENDAR */
+
+function createCalendar() {
+
+    // Remove previous dates
+    grid.querySelectorAll(".date").forEach(
+        date => date.remove()
+    );
+
+    const monthNames = [
+        "January", "February", "March",
+        "April", "May", "June",
+        "July", "August", "September",
+        "October", "November", "December"
+    ];
+
+    heading.textContent =
+        monthNames[currentMonth] + " " + currentYear;
+
+    // First weekday
+    const firstDay = new Date(
+        currentYear,
+        currentMonth,
+        1
+    ).getDay();
+
+    // Total days in month
+    const totalDays = new Date(
+        currentYear,
+        currentMonth + 1,
+        0
+    ).getDate();
+
+    // Empty cells
+    for (let i = 0; i < firstDay; i++) {
+
+        const empty = document.createElement("div");
+
+        empty.className = "date empty";
+
+        grid.appendChild(empty);
+    }
+
+    const today = new Date();
+
+    // Generate dates
+    for (let day = 1; day <= totalDays; day++) {
+
+        const cell = document.createElement("div");
+
+        cell.className = "date";
+        cell.textContent = day;
+
+        // Today's date
+        if (
+            day === today.getDate() &&
+            currentMonth === today.getMonth() &&
+            currentYear === today.getFullYear()
+        ) {
+
+            cell.classList.add("today");
+        }
+
+        // November 4 - Special date
+        if (
+            day === loveDay &&
+            currentMonth === loveMonth &&
+            currentYear === loveYear
+        ) {
+
+            cell.classList.add("love-date");
+
+            const heart = document.createElement("span");
+
+            heart.className = "heart";
+            heart.textContent = "♥";
+
+            cell.appendChild(heart);
+
+            cell.title = "A special day ❤️";
+        }
+
+        grid.appendChild(cell);
+    }
+
+}
+
+
+/* WINDOWS FLUENT REVEAL EFFECT */
+
+grid.addEventListener("pointermove", function(event) {
+
+    const dates = grid.querySelectorAll(
+        ".date:not(.empty)"
+    );
+
+    dates.forEach(cell => {
+
+        const rect = cell.getBoundingClientRect();
+
+        // Mouse position relative to cell
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+
+        // Calculate distance from cell centre
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+
+        const distance = Math.hypot(
+            x - centerX,
+            y - centerY
+        );
+
+        // Light intensity
+        const strength = Math.max(
+            0,
+            1 - distance / 110
+        );
+
+        // Position of light
+        cell.style.setProperty(
+            "--reveal-x",
+            x + "px"
+        );
+
+        cell.style.setProperty(
+            "--reveal-y",
+            y + "px"
+        );
+
+        // Light opacity
+        cell.style.setProperty(
+            "--reveal-opacity",
+            strength * 0.9
+        );
+
+        // Reveal border
+        cell.style.setProperty(
+            "--reveal-border",
+            strength * 0.65
+        );
+
+    });
+
+});
+
+
+/* REMOVE LIGHT WHEN MOUSE LEAVES */
+
+grid.addEventListener("pointerleave", function() {
+
+    const dates = grid.querySelectorAll(".date");
+
+    dates.forEach(cell => {
+
+        cell.style.setProperty(
+            "--reveal-opacity", "0"
+        );
+
+        cell.style.setProperty(
+            "--reveal-border", "0"
+        );
+
+    });
+
+});
+
+
+/* MONTH NAVIGATION */
+
+document.getElementById("prevMonth")
+.addEventListener("click", function() {
+
+    currentMonth--;
+
+    if (currentMonth < 0) {
+        currentMonth = 11;
+        currentYear--;
+    }
+
+    createCalendar();
+
+});
+
+
+document.getElementById("nextMonth")
+.addEventListener("click", function() {
+
+    currentMonth++;
+
+    if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+    }
+
+    createCalendar();
+
+});
+
+
+/* INITIALIZE */
+
+createCalendar();
+
+</script>
+
+</body>
+</html>
